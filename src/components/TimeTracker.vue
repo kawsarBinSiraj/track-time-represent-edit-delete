@@ -1,8 +1,5 @@
 <script>
-import { Modal } from "bootstrap";
 import VueResizable from "vue-resizable";
-import { toast } from "vue3-toastify";
-import "vue3-toastify/dist/index.css";
 
 export default {
     name: "time-tracker",
@@ -14,19 +11,24 @@ export default {
         },
         onSave: {
             type: Function,
-            required: true,
+            required: false,
+        },
+        onChange: {
+            type: Function,
+            required: false,
         },
     },
     data() {
         return {
-            count: 0,
+            MIN_PIXELS: 5,
+            EACH_HOURS_WIDTH: 5 * 60,
+            minW: 5 * 5, // min-minute = (5 / 1) = 5
+            maxH: 50, // Fixed height
+            minH: 50, // Fixed minimum height   count: 0,
             top: 0,
             bottom: 0,
-            height: 50,
             width: 40,
-            maxH: 50, // Fixed height
-            minW: 5 * 5, // min-minute = (5 / 1) = 5
-            minH: 50, // Fixed minimum height
+            height: 50,
             handlers: ["r", "l"],
             fit: true,
             event: "",
@@ -41,8 +43,6 @@ export default {
                 hoursData: [],
                 data: [],
             },
-            MIN_PIXELS: 5,
-            EACH_HOURS_WIDTH: 5 * 60,
             modalShow: false,
             deleteItemId: null,
             debounceTimer: null,
@@ -62,7 +62,7 @@ export default {
     methods: {
         openDeleteModal() {
             const modalElement = this.$refs.deleteModal;
-            this.deleteModalInstance = new Modal(modalElement);
+            this.deleteModalInstance = new bootstrap.Modal(modalElement);
             this.deleteModalInstance.show();
         },
 
@@ -72,7 +72,7 @@ export default {
 
         openSelectTypeModal() {
             const modalElement = this.$refs.typeModal;
-            this.typeModalInstance = new Modal(modalElement);
+            this.typeModalInstance = new bootstrap.Modal(modalElement);
             this.typeModalInstance.show();
         },
 
@@ -81,16 +81,49 @@ export default {
         },
 
         handleSubmit() {
-            this.onSave({ ...this.timeTrackers, ...this.customData });
+            if (this.onSave) {
+                const data = this.generateResults(this.customData);
+                this.onSave(data);
+            }
+        },
+
+        handleOnChange() {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = setTimeout(() => {
+                if (this.onChange) {
+                    const data = this.generateResults(this.customData);
+                    this.onChange(data);
+                }
+            }, 300); // delay to submit data around 3s
+        },
+
+        generateResults(customData) {
+            const { data, shiftsInfo } = customData;
+            const generatedData = data.map((i, j) => {
+                const { id, type, start_time, end_time } = i;
+                return { id, type, start_time, end_time };
+            });
+            return { ...this.timeTrackers, data: generatedData, shiftsInfo };
+        },
+
+        getShiftStartMinutes() {
+            const { start_time } = this.timeTrackers.shiftsInfo;
+            const date = new Date(start_time);
+            const utcMinutes = date.getUTCMinutes();
+            return utcMinutes;
+        },
+        getShiftEndMinutes() {
+            const { end_time } = this.timeTrackers.shiftsInfo;
+            const date = new Date(end_time);
+            const utcMinutes = date.getUTCMinutes();
+            return utcMinutes;
         },
 
         eHandler(data, itemIndex) {
             const threshold = 0; // Threshold value to determine maximum width allowance
-
             // Retrieve the current item being resized
             const currentItem = this.customData.data[itemIndex];
             const { left = 0, width = 0 } = data; // Destructure left and width from resizeData
-
             const isLeftResizing = document.getElementsByTagName("body")[0].getAttribute("style") === "cursor: w-resize;";
 
             if (isLeftResizing) {
@@ -100,51 +133,34 @@ export default {
                 // if it's has a previous item
                 if (itemIndex > 0) {
                     const prevItem = this.customData.data[itemIndex - 1];
-
                     const GET_CUR_WIDTH = currentItem.endPosition - currentItem.startPosition;
-
                     const AT_MOST_WIDTH = currentItem.startPosition - prevItem.endPosition;
-
                     currentItem.maxWidth = GET_CUR_WIDTH + AT_MOST_WIDTH;
-
                     // Recalculate the end position based on the new width
                     currentItem.endPosition = currentItem.startPosition + currentItem.breakWidth;
                 } else {
-                    const THRESHOLD = Number(this.customData.shiftsInfo.startM) * this.MIN_PIXELS;
-
-                    // currentItem.maxWidth = undefined;
-
+                    const THRESHOLD = Number(this.getShiftStartMinutes()) * this.MIN_PIXELS;
                     // if (left < THRESHOLD) {
                     const GET_CUR_WIDTH = currentItem.endPosition - currentItem.startPosition;
-
                     const AT_MOST_WIDTH = currentItem.startPosition - THRESHOLD;
-
                     currentItem.maxWidth = GET_CUR_WIDTH + AT_MOST_WIDTH;
-
                     // Recalculate the end position based on the new width
                     currentItem.endPosition = currentItem.startPosition + currentItem.breakWidth;
-
-                    console.log(currentItem, "current-item");
-                    console.log(left, "left", currentItem.maxHeight);
-                    // }
                 }
             }
             // do stuff for write resizing
             else {
                 // reset maxwidth for last item
                 if (itemIndex === this.customData.data.length - 1) currentItem.maxWidth = undefined;
-
                 // Update current item's properties based on the resize data
                 currentItem.breakWidth = width; // Set the new width
                 currentItem.startPosition = left; // Update the starting position
-
                 // Calculate the end position of the current item
                 currentItem.endPosition = currentItem.startPosition + currentItem.breakWidth;
 
                 // Ensure the next item exists in the array to update its maxWidth
                 if (this.customData.data.length > itemIndex + 1) {
                     const nextItemStartPosition = this.customData.data[itemIndex + 1].startPosition;
-
                     // Calculate the maximum allowable width for the current item based on the next item's start position
                     currentItem.maxWidth = nextItemStartPosition - currentItem.startPosition - threshold;
                 }
@@ -154,85 +170,212 @@ export default {
             const getStartTimes = this.calculateTimeFromPosition(this.customData.data[itemIndex].startPosition);
             const getEndTimes = this.calculateTimeFromPosition(this.customData.data[itemIndex].startPosition + this.customData.data[itemIndex].breakWidth);
 
-            // updated start hours & mins
-            // add plus one due to the 0 base index
-            currentItem.startHours = getStartTimes.hours + 1;
+            // Update start hours & mins
+            currentItem.startHours = (getStartTimes.hours + 1) % 24; // Wrap around if necessary
             currentItem.startMin = getStartTimes.mins;
 
-            // updated end hours & mins
-            currentItem.endHours = getEndTimes.hours + 1;
+            // Update end hours & mins
+            currentItem.endHours = (getEndTimes.hours + 1) % 24; // Wrap around if necessary
             currentItem.endMin = getEndTimes.mins;
+
+            // Additional adjustment to ensure hours are in correct format
+            if (currentItem.startHours === 24) currentItem.startHours = 0; // Wrap 24 to 00
+            if (currentItem.endHours === 24) currentItem.endHours = 0; // Wrap 24 to 00
+
+            // update start and end with timestamp
+            this.updateTimestamp(currentItem);
+
+            // call on change handler
+            this.handleOnChange();
+        },
+
+        createStartAndEndTime(shiftsInfo, adjustments) {
+            const startHours = Number(adjustments.startHours);
+            const startMin = Number(adjustments.startMin);
+            // Parse the original start time from shiftsInfo
+            const originalStartDate = new Date(shiftsInfo.start_time);
+
+            // Create a new start date based on provided startHours and startMin
+            const newStartDate = new Date(originalStartDate); // Clone the original date
+
+            // Check if the new start hour is less than the original start hour
+            if (startHours < originalStartDate.getUTCHours() || (startHours === originalStartDate.getUTCHours() && startMin < originalStartDate.getUTCMinutes())) {
+                newStartDate.setUTCDate(newStartDate.getUTCDate() + 1); // Increment date
+            }
+
+            // Set the new start hours and minutes
+            newStartDate.setUTCHours(startHours);
+            newStartDate.setUTCMinutes(startMin);
+            newStartDate.setUTCSeconds(0); // Set seconds to 0
+
+            // Create end time as 5 minutes after the new start time
+            const newEndDate = new Date(newStartDate);
+            newEndDate.setUTCMinutes(newStartDate.getUTCMinutes() + 5); // Add 5 minutes to start time
+
+            // Format the dates to include the UTC timezone offset (+06:00)
+            const timezoneOffset = "+06:00"; // Adjust based on your requirements
+            const formattedStartTime = this.formatDateWithOffset(newStartDate, timezoneOffset);
+            const formattedEndTime = this.formatDateWithOffset(newEndDate, timezoneOffset);
+
+            return {
+                start_time: formattedStartTime,
+                end_time: formattedEndTime,
+            };
+        },
+
+        updateTimestamp(currentItem) {
+            // Parse the initial start_time date to preserve its date context
+            const baseStartDate = new Date(currentItem.start_time);
+            // Create a new Date object for the start time
+            const newStartTime = new Date(baseStartDate);
+            // Set new start hours and minutes
+            newStartTime.setUTCHours(Number(currentItem.startHours));
+            newStartTime.setUTCMinutes(Number(currentItem.startMin));
+            newStartTime.setUTCSeconds(0);
+            // Adjust date only if startHours/startMin is a time earlier than the original start time
+            if (
+                Number(currentItem.startHours) < baseStartDate.getUTCHours() ||
+                (Number(currentItem.startHours) === baseStartDate.getUTCHours() && Number(currentItem.startMin) < baseStartDate.getUTCMinutes())
+            ) {
+                // Increment the date only if the new start time is earlier than the original
+                newStartTime.setUTCDate(newStartTime.getUTCDate() + 1);
+            }
+
+            // Create a new Date object for the end time, starting from the adjusted start time
+            const newEndTime = new Date(newStartTime);
+            // Set new end hours and minutes based on currentItem data
+            newEndTime.setUTCHours(Number(currentItem.endHours));
+            newEndTime.setUTCMinutes(Number(currentItem.endMin));
+            newEndTime.setUTCSeconds(0);
+
+            // Check if the end time is earlier than the start time (indicating it’s the next day)
+            if (
+                Number(currentItem.endHours) < Number(currentItem.startHours) ||
+                (Number(currentItem.endHours) === Number(currentItem.startHours) && Number(currentItem.endMin) < Number(currentItem.startMin))
+            ) {
+                newEndTime.setUTCDate(newEndTime.getUTCDate() + 1); // Move end time to the next day
+            }
+
+            // Format the times with the timezone offset +06:00
+            const timezoneOffset = "+06:00";
+            currentItem.start_time = this.formatDateWithOffset(newStartTime, timezoneOffset);
+            currentItem.end_time = this.formatDateWithOffset(newEndTime, timezoneOffset);
+        },
+
+        formatDateWithOffset(date, offset) {
+            // Get the ISO string of the date
+            const isoString = date.toISOString();
+            // Replace the 'Z' (which stands for UTC) with the desired timezone offset
+            return isoString.replace("Z", offset);
         },
 
         handleStartPosition(item) {
             return item.startPosition;
         },
 
-        calculatePositionsAndWidth(startHours, startMin, endHours, endMin) {
+        calculatePositionsAndWidth(start_time, end_time) {
+            // Parse start and end times
+            const startDate = new Date(start_time);
+            const endDate = new Date(end_time);
+
+            // Extract hours and minutes
+            const startHours = startDate.getHours();
+            const startMin = startDate.getMinutes();
+            const endHours = endDate.getHours();
+            const endMin = endDate.getMinutes();
+
             const pixelsPerHour = this.EACH_HOURS_WIDTH;
             const pixelsPerMin = this.MIN_PIXELS;
-            const startHoursIdx = Number(this.customData.hoursData[0].hours); // 03 -> 3
+            const startHoursIdx = Number(this.customData.hoursData[0].hours);
 
             // Convert start time to pixel position
             const startPosition = (startHours - startHoursIdx) * pixelsPerHour + startMin * pixelsPerMin;
 
-            // Convert end time to pixel position
-            const endPosition = (endHours - startHoursIdx) * pixelsPerHour + endMin * pixelsPerMin;
-
+            let endPosition;
+            // Check if the end time crosses midnight
+            if (endDate.getDate() !== startDate.getDate()) {
+                // Calculate pixels from start time to midnight
+                const hoursUntilMidnight = 24 - startHours - 1;
+                const midnightPosition = startPosition + hoursUntilMidnight * pixelsPerHour + (60 - startMin) * pixelsPerMin;
+                // Add pixels for time from midnight to end time
+                endPosition = midnightPosition + (endHours * pixelsPerHour + endMin * pixelsPerMin);
+            } else {
+                // Same-day shift
+                endPosition = (endHours - startHoursIdx) * pixelsPerHour + endMin * pixelsPerMin;
+            }
             // Calculate the width of the item
             const width = endPosition - startPosition;
-
             return { startPosition, endPosition, breakWidth: width };
         },
 
         calculateTimeFromPosition(pixelPosition) {
             if (!this.customData.hoursData?.length) return;
-
             // Base timeline start time (for example, 9:00 AM)
-            const baseHours = this.customData.hoursData?.length ? Number(this.customData.hoursData[0].hours) - 1 : 0; // Adjust based on your timeline start time
-            const baseMinutes = 0; // Set to the starting minutes if necessary
+            const baseHours = this.customData.hoursData.length ? Number(this.customData.hoursData[0]?.hours) - 1 : 0; // Get the base start hour
+            const baseMinutes = 0; // Starting minutes
 
             // Calculate total minutes from pixel position
-            let totalMinutes = Math.floor(pixelPosition / this.MIN_PIXELS);
+            let totalMinutes = Math.floor(pixelPosition / this.MIN_PIXELS); // Convert pixel position to total minutes
 
             // Calculate the start hours and minutes
-            let startHours = Math.floor(totalMinutes / 60);
-            let startMin = totalMinutes % 60;
+            let startHours = Math.floor(totalMinutes / 60); // Calculate hours
+            let startMin = totalMinutes % 60; // Remaining minutes
 
             // Adjust if minutes equal to or greater than 60
             if (startMin >= 60) {
                 startMin -= 60;
-                startHours += 1;
+                startHours += 1; // Increment hour if minutes exceed 60
             }
 
             // Add base start time (timeline's start time)
-            startHours += baseHours;
-            startMin += baseMinutes;
+            startHours += baseHours; // Add base hours
+            startMin += baseMinutes; // Add base minutes
 
-            // If minutes exceed 60, adjust the hours and minutes
+            // If minutes exceed 60 after adding base minutes, adjust the hours and minutes
             if (startMin >= 60) {
-                startMin -= 60;
-                startHours += 1;
+                startMin -= 60; // Subtract 60 from minutes
+                startHours += 1; // Increment hour
             }
-
+            // Ensure hours stay in 24-hour format
+            startHours = (startHours + 24) % 24; // Wrap around if hours exceed 23
+            // return hours and minutes
             return { hours: startHours, mins: startMin };
         },
 
         modifyRootData(data) {
-            const TEMP_DATA = data;
+            const TEMP_DATA = data.map((item) => {
+                const start = new Date(item.start_time);
+                const end = item.end_time ? new Date(item.end_time) : new Date();
+                return {
+                    id: item.id,
+                    start_time: item.start_time,
+                    end_time: item.end_time,
+                    startHours: start.getHours(),
+                    startMin: start.getMinutes(),
+                    endHours: end.getHours(),
+                    endMin: end.getMinutes(),
+                    type: item.type,
+                };
+            });
+
+            // store the data
+            const customData = [];
 
             for (let i = 0; i < TEMP_DATA.length; i++) {
-                const { startHours, startMin, endHours, endMin } = TEMP_DATA[i];
+                const { startHours, startMin, endHours, endMin, start_time, end_time } = TEMP_DATA[i];
                 // skip for startHours == endHours && startMin == endMin
                 if (startHours == endHours && startMin == endMin) continue;
 
-                this.customData.data[i] = {
+                customData.push({
                     maxWidth: 0,
                     ...TEMP_DATA[i],
                     ...this.customData.data[i],
-                    ...this.calculatePositionsAndWidth(startHours, startMin, endHours, endMin),
-                };
+                    ...this.calculatePositionsAndWidth(start_time, end_time),
+                });
             }
+
+            // set state customData
+            this.customData.data = customData;
 
             // sort the data
             this.customData.data.sort((a, b) => {
@@ -246,16 +389,12 @@ export default {
         handleDoubleClick(event) {
             // prevent double click
             if (!this.editable) return;
-
             // Get the productivity container element
             const productivityContainer = this.$refs.productivityContainer;
-
             // Calculate the bounding rectangle of the container
             const rect = productivityContainer.getBoundingClientRect();
-
             // Calculate the relative X and Y positions
             const relativeX = event.clientX - rect.left; // X position relative to the left of the container
-
             const isResizableElement = !Boolean(event.target.closest(".resizable"));
 
             if (isResizableElement) {
@@ -270,30 +409,22 @@ export default {
 
                 // if each minute pixels is greater than 5 pixels, then add minimum width is 5 minute
                 const MIN_WIDTH = this.MIN_PIXELS * 5;
-
                 // Calculate the new item's start and end positions
                 let newItemStart = relativeX;
                 let newItemEnd = newItemStart + MIN_WIDTH;
-
                 // Get the container's width
                 const containerWidth = productivityContainer.offsetWidth;
-
                 // Ensure newItemEnd does not exceed the container width
                 if (newItemEnd > containerWidth) {
                     // Check if there's enough space to fit at least 5 minutes
                     if (containerWidth - newItemStart < MIN_WIDTH) {
                         // Not enough space for insertion
-                        toast("There is not enough space for insertion. Minimum insertion limit is " + MIN_WIDTH / this.MIN_PIXELS + " minutes", {
-                            type: "error",
-                            autoClose: 1500,
-                        });
-                        return;
+                        return alert("There is not enough space for insertion. Minimum insertion limit is " + MIN_WIDTH / this.MIN_PIXELS + " minutes");
                     }
                     // Adjust the end and start positions to fit within the container
                     newItemEnd = containerWidth;
                     newItemStart = containerWidth - MIN_WIDTH;
                 }
-
                 // Check if the new position is insert-able
                 const insertAble = this.isInsertAble(intervals, newItemStart, newItemEnd);
 
@@ -307,11 +438,7 @@ export default {
                     this.openSelectTypeModal();
                 } else {
                     // invalid for insertions
-                    // can insert only 5 minutes
-                    toast("There is not enough for insertion. Minimum insertion limit is " + (this.MIN_PIXELS * 5) / this.MIN_PIXELS + " minutes", {
-                        type: "error",
-                        autoClose: 1500,
-                    });
+                    return alert("There is not enough for insertion. Minimum insertion limit is " + (this.MIN_PIXELS * 5) / this.MIN_PIXELS + " minutes");
                 }
             } else {
                 // is control is true, prevent to delete
@@ -365,7 +492,6 @@ export default {
                 if (this.MIN_PIXELS < 10) {
                     this.MIN_PIXELS = this.MIN_PIXELS + 1;
                     this.EACH_HOURS_WIDTH = this.MIN_PIXELS * 60;
-
                     // recalculate each-positions
                     this.modifyRootData(this.customData.data);
                 }
@@ -373,12 +499,13 @@ export default {
                 if (this.MIN_PIXELS > 3) {
                     this.MIN_PIXELS = this.MIN_PIXELS - 1;
                     this.EACH_HOURS_WIDTH = this.MIN_PIXELS * 60;
-
                     // recalculate each-positions
                     this.modifyRootData(this.customData.data);
                 }
             }
-            this.minW = this.MIN_PIXELS * 5; // re-calculate minimum-minute // currently it will ensure 1 minute
+            // re-calculate minimum-minute
+            // currently it will ensure 1 minute
+            this.minW = this.MIN_PIXELS * 5;
         },
 
         handleOk() {
@@ -392,33 +519,26 @@ export default {
         calculateDuration(startHours, startMin, endHours, endMin) {
             // Convert start and end times to total minutes
             const startTotalMinutes = startHours * 60 + startMin;
-            const endTotalMinutes = endHours * 60 + endMin;
-
+            let endTotalMinutes = endHours * 60 + endMin;
+            // Adjust end time if it is less than start time (crossing midnight)
+            if (endTotalMinutes < startTotalMinutes) {
+                endTotalMinutes += 24 * 60; // Add 24 hours in minutes
+            }
             // Calculate the duration in minutes
             const durationInMinutes = endTotalMinutes - startTotalMinutes;
-
-            // Check if duration is negative, which means end time is earlier than start time
-            if (durationInMinutes < 0) {
-                return "Invalid duration"; // Handle invalid case
-            }
-
             // Convert back to hours and minutes
             const durationHours = Math.floor(durationInMinutes / 60);
             const durationMins = durationInMinutes % 60;
-
             return { h: durationHours, m: durationMins };
         },
 
         // Method to format the duration string, hiding hours if only minutes exist
         formattedDuration(item, type = "condition") {
+            // const duration = this.calculateDuration(start_time, end_time);
             const duration = this.calculateDuration(item.startHours, item.startMin, item.endHours, item.endMin);
 
-            if (!duration) {
-                return "Invalid";
-            }
-
+            if (!duration) return "Invalid";
             const { h = "", m = "" } = duration;
-
             if (type === "condition") {
                 if (!h && m < 5 && this.MIN_PIXELS) {
                     return "";
@@ -426,7 +546,6 @@ export default {
                     return "";
                 }
             }
-
             return `${h}:${m}`;
         },
 
@@ -469,8 +588,12 @@ export default {
                 startPosition: newItemStart,
                 endPosition: newItemEnd,
                 breakWidth: newItemEnd - newItemStart,
-                type: isProductive ? "productivity" : "break",
+                type: isProductive ? "PRODUCTIVE" : "BREAK",
             };
+
+            const { start_time, end_time } = this.createStartAndEndTime(this.customData.shiftsInfo, tempItem);
+            tempItem["start_time"] = start_time;
+            tempItem["end_time"] = end_time;
 
             // Push the new item to the existing data array
             this.customData.data.push(tempItem);
@@ -486,17 +609,48 @@ export default {
         },
 
         createdHoursData(shift = {}) {
-            const { startH = 0, startM = 0, endH = 0, endM = 0 } = shift;
+            //extract the start and end with timestamp
+            const startTime = new Date(shift?.start_time);
+            const endTime = shift?.end_time ? new Date(shift.end_time) : new Date();
+
+            // getting hour, minutes
+            const startH = startTime.getHours();
+            const endH = endTime.getHours();
+            const startM = startTime.getMinutes();
+            const endM = endTime.getMinutes();
+
             const tempHeader = [];
             let start = Number(startH);
-            const j = Number(endH);
-            for (let i = start; i <= j; i++) {
-                tempHeader.push({
-                    id: i,
-                    hours: i < 10 ? String("0" + i) : String(i),
-                    min: "00",
-                });
+            const end = Number(endH);
+
+            if (end < start) {
+                // Add hours from start hour to 23
+                for (let i = start; i < 24; i++) {
+                    tempHeader.push({
+                        id: i,
+                        hours: i < 10 ? String("0" + i) : String(i),
+                        min: "00",
+                    });
+                }
+                // Add hours from 0 to end hour
+                for (let i = 0; i <= end; i++) {
+                    tempHeader.push({
+                        id: i,
+                        hours: i < 10 ? String("0" + i) : String(i),
+                        min: "00",
+                    });
+                }
+            } else {
+                // Normal case: end hour is greater than or equal to start hour
+                for (let i = start; i <= end; i++) {
+                    tempHeader.push({
+                        id: i,
+                        hours: i < 10 ? String("0" + i) : String(i),
+                        min: "00",
+                    });
+                }
             }
+
             this.customData.hoursData = tempHeader;
             this.customData.shiftsInfo = this.timeTrackers.shiftsInfo;
         },
@@ -534,13 +688,14 @@ export default {
         :style="{
             '--each-min-pixels': this.MIN_PIXELS + 'px',
             '--hours-length': this.customData.hoursData.length,
+            '--left-minus': Number(this.getShiftStartMinutes()) * this.MIN_PIXELS + 'px',
         }"
     >
         <div class="enable-zoom zoom mb-3 d-flex align-items-center">
             <button class="custom-btn rounded-circle me-1" type="button" @click="handleZoom('plus')">+</button>
             <button class="custom-btn rounded-circle me-3" type="button" @click="handleZoom('minus')">-</button>
             <h4 class="mb-0 fw-normal">{{ this.timeTrackers?.shiftsInfo?.title }}</h4>
-            <button @click="this.handleSubmit" class="ms-auto btn btn-sm btn-success bg-gradient">Save</button>
+            <button v-if="this.editable" @click="this.handleSubmit" class="ms-auto btn btn-sm btn-success bg-gradient">Save</button>
         </div>
         <div ref="timelineRef" class="timeline-widget border rounded">
             <div class="timeline-header">
@@ -549,10 +704,17 @@ export default {
                     v-for="(item, key) in customData.hoursData"
                     :key="item.id"
                     :style="{
-                        '--total-minutes': key === this.customData.hoursData?.length - 1 ? Number(this.customData.shiftsInfo.endM) : 60,
+                        '--total-minutes': key === this.customData.hoursData?.length - 1 ? Number(this.getShiftEndMinutes()) : 60,
                     }"
                 >
-                    <div class="text-nowrap">{{ item.hours }} : {{ item.min }}</div>
+                    <div
+                        class="text-nowrap"
+                        :style="{
+                            'padding-left': key == 0 && Number(this.getShiftStartMinutes()) < 45 ? Number(this.getShiftStartMinutes()) * this.MIN_PIXELS + 'px' : '0px',
+                        }"
+                    >
+                        {{ item.hours }} : {{ item.min }}
+                    </div>
                     <div class="p-0 m-0 text-start d-flex minutes-widget w-full" v-if="this.MIN_PIXELS > 3">
                         <p
                             :style="{
@@ -568,19 +730,19 @@ export default {
             </div>
             <div
                 v-if="customData.data"
+                :style="{
+                    '--subs': Number(60 - this.getShiftEndMinutes()) * this.MIN_PIXELS + 'px',
+                }"
                 class="productivity"
                 @dblclick="handleDoubleClick"
                 ref="productivityContainer"
-                :style="{
-                    '--max-left-w-of-productivity': Number(this.customData.shiftsInfo.startM) * this.MIN_PIXELS + 'px',
-                }"
             >
                 <vue-resizable
                     v-for="(item, index) in customData.data"
                     :key="item.id"
                     :class="{
                         resizable: true,
-                        'productivity-steps': item.type === 'productivity',
+                        'productivity-steps': item.type === 'PRODUCTIVE',
                     }"
                     :ref="'resizableComponent'"
                     :dragSelector="undefined"

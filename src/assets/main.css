@@ -1,14 +1,27 @@
-@import "./base.css";
+/**
+ * description :- main css for time tracker
+ * @created_by : Kawsar Bin Siraj
+ * created_at:- 04/11/2024 08:49:34
+ */
 
-#app {
-    max-width: 1400px;
-    padding: 2rem;
-    font-weight: normal;
-    margin: 0 auto;
+#main {
+    /* my custom variables  */
+    --each-min-pixels: 5px; /* Define a pixel value for each minute */
+    --hours-length: 9;
+    --left-minus: 0px;
+    /* current total minutes */
+    --total-minutes: 60;
+    --productivity-container-width: calc(var(--each-min-pixels) * 60 * var(--hours-length));
+    --break-color: #b05a7a;
+    --productive-color: #84d2c5;
+    --highlight-color: #00f;
+    --scrollbar-bg-color: #4caf50;
+    --theme-gray: #f5f5f5;
+    --hour-font-size: 12px;
+    --minute-font-size: 10px;
 }
 
 /* Basic styles for the hours timeline */
-
 .timeline-widget {
     position: relative;
     overflow-y: hidden;
@@ -19,7 +32,7 @@
 }
 
 .timeline-widget::-webkit-scrollbar-thumb {
-    background-color: #4caf50; /* Customize the color of the scroll thumb */
+    background-color: var(--scrollbar-bg-color); /* Customize the color of the scroll thumb */
     border-radius: 10px; /* Make the thumb rounded */
 }
 
@@ -36,19 +49,23 @@
 
 .timeline-header {
     display: flex;
-    justify-content: space-between;
     border: 0px solid #ccc;
     padding: 8px 0;
+    /* for boundary checking shift time base */
+    margin-left: calc(var(--left-minus) * -1);
+    /* justify-content: space-between; */
     /* background-color: #f5f5f5; */
     /* width: calc(var(--each-min-pixels) * 60 * var(--hours-length)); */
 }
 
 .hour {
-    text-align: center;
-    /* border-right: 1px solid #ccc; */
-    min-width: calc(var(--each-min-pixels) * var(--total-minutes)); /* Multiplies the pixel value by 60 for an hour */
     font-weight: 600;
     position: relative;
+    text-align: center;
+    font-size: var(--hour-font-size);
+    /* border-right: 1px solid #ccc; */
+    min-width: calc(var(--each-min-pixels) * calc(var(--total-minutes) + 0)); 
+    overflow: hidden;
 }
 
 .hour::after {
@@ -69,7 +86,6 @@
     display: flex;
     justify-content: space-between;
     border: 1px solid #ccc;
-    /* background-color: #f5f5f5; */
     overflow-x: scroll;
 }
 
@@ -79,9 +95,10 @@
     position: relative !important;
     height: 50px;
     border: 0px;
-    /* background-color: #eaeaea; */
-    width: calc(var(--productivity-container-width) - var(--subs));
     background-color: #f5f5f5;
+    width: calc(var(--productivity-container-width) - var(--subs));
+    /* for boundary checking shift time base */
+    margin-left: calc(var(--left-minus) * -1);
 }
 
 /* Break element */
@@ -118,13 +135,13 @@
 .resizable {
     position: absolute !important;
     border: 2px dotted transparent;
-    background-color: #b05a7a;
+    background-color: var(--break-color);
     color: #fff;
     display: inline-block !important;
     z-index: 10;
 }
 .resizable.productivity-steps {
-    background-color: #84d2c5;
+    background-color: var(--productive-color);
     color: #fff;
 }
 
@@ -138,7 +155,7 @@
 
 .resizable:is(:hover, :focus) {
     z-index: 20;
-    border-color: #0d6efd;
+    border-color: var(--highlight-color);
 }
 
 .resizable-item {
@@ -161,21 +178,21 @@
 .custom-btn {
     border: none;
     outline: none;
-    transition: all 0.3s;
+    transition: all 0.3s linear;
     font-size: 15px;
-    background-color: #081ebe;
+    background-color: var(--highlight-color);
     color: #fff;
     width: 30px;
     height: 30px;
     border-radius: 100%;
-    font-size: 18px;
+    font-size: 17px;
     display: inline-grid;
     place-items: center;
     padding: 0;
 }
 
 .custom-btn:hover {
-    background-color: #0d6efd;
+    opacity: 0.75 !important;
 }
 
 .input-form-check .form-check-input {
@@ -189,20 +206,20 @@
 }
 
 .block-widget {
-    --position-thresold: 20px;
+    --position-threshold: 20px;
 }
 
 .block-widget .left-block,
 .right-block {
     color: #fff;
-    font-size: 12px;
+    font-size: 0.6rem;
     position: absolute;
     top: -10px;
     visibility: hidden;
     opacity: 0;
     background-color: #2f2f2f;
     transition: all 0.3s !important;
-    padding: 1px 6px;
+    padding: 1px 2px;
 }
 
 .resizable:is(:hover, :focus) .block-widget .left-block,
@@ -212,18 +229,21 @@
 }
 
 .block-widget .left-block {
-    left: calc(var(--position-thresold) * -1);
+    left: calc(var(--position-threshold) * -1);
 }
 
 .block-widget .right-block {
-    right: calc(var(--position-thresold) * -1);
+    right: calc(var(--position-threshold) * -1);
+    top: initial !important;
+    bottom: 2px;
 }
 
 .minutes-widget p {
-    font-size: 10px;
+    font-size: var(--minute-font-size);
     padding: 0;
     margin: 0;
     overflow: hidden;
     color: #999;
+    flex-shrink: 0;
+    font-weight: 400;
 }
-

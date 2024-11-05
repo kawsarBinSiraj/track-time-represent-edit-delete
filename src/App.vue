@@ -13,35 +13,15 @@ export default {
                     id: 1,
                     shiftsInfo: {
                         title: "Morning Shift",
-                        startH: "04",
-                        startM: "10",
-                        endH: "10",
-                        endM: "60",
+                        start_time: "2024-10-05T22:20:20.638366+06:00",
+                        end_time: "2024-10-06T02:20:20.638366+06:00",
                     },
                     data: [
                         {
-                            id: 6857,
-                            startHours: 4,
-                            startMin: 36,
-                            endHours: 5,
-                            endMin: 18,
-                            type: "productivity",
-                        },
-                        {
-                            id: 6948,
-                            startHours: 5,
-                            startMin: 24,
-                            endHours: 5,
-                            endMin: 51,
-                            type: "break",
-                        },
-                        {
-                            id: 7316,
-                            startHours: 5,
-                            startMin: 51,
-                            endHours: 5,
-                            endMin: 52,
-                            type: "productivity",
+                            id: 2,
+                            start_time: "2024-12-05T23:30:00.638366+06:00",
+                            end_time: "2024-12-05T23:45:00.638366+06:00",
+                            type: "BREAK",
                         },
                     ],
                 },
@@ -50,7 +30,9 @@ export default {
     },
     methods: {
         handleSave(data) {
-            console.log(data);
+            this.result = data;
+        },
+        handleChange(data) {
             this.result = data;
         },
     },
@@ -58,16 +40,33 @@ export default {
 </script>
 
 <template>
-    <div class="tracker-wrapper py-4">
-        <h1 class="mb-5 display-5 fw-light">
-            <img width="100" src="https://upload.wikimedia.org/wikipedia/commons/9/95/Vue.js_Logo_2.svg" alt="logo" class="img-fluid" />
-            track time represent/edit/delete
-        </h1>
-        <div class="individual-tracker mb-5" v-for="timeTrackers in trackersInfo" :key="timeTrackers.id">
-            <time-tracker :timeTrackers="timeTrackers" :editable="true" :onSave="handleSave" />
+    <div class="tracker-wrapper py-0">
+        <header class="mb-5">
+            <h1 class="display-5 fw-light mb-3">
+                <img width="50" src="https://upload.wikimedia.org/wikipedia/commons/9/95/Vue.js_Logo_2.svg" alt="logo" class="img-fluid" />
+                track time represent/edit/delete
+            </h1>
+            <div class="docs text-secondary ps-4 small">
+                // you can insert a new entry with double click in empty slot (productive/break time) <br/>
+                // for deleting the old entry you have to double with existing entry <br/>
+                // for editing you can resize (left/right) on existing entry and make changes <br/>
+                // for zoom(in/out) you can use plus/minus buttons <br/>
+                // result will get onChange as well as onSave event
+            </div>
+        </header>
+        <div class="individual-tracker mb-2" v-for="timeTrackers in trackersInfo" :key="timeTrackers.id">
+            <time-tracker :timeTrackers="timeTrackers" :editable="true" :onSave="handleSave" :onChange="handleChange" />
         </div>
-        <div id="result" v-if="result">
-            {{ JSON.stringify(result) }}
-        </div>
+        <pre id="result" v-if="result">
+            {{ JSON.stringify(result, null, 2) }}
+        </pre>
     </div>
 </template>
+
+<style scope>
+#app {
+    max-width: 1200px;
+    margin: 50px auto;
+    padding: 15px;
+}
+</style>

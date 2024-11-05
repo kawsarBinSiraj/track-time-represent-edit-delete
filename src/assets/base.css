@@ -25,7 +25,6 @@ body {
 #main {
     /* my custom variables  */
     --each-min-pixels: 5px; /* Define a pixel value for each minute */
-
     --hours-length: 9;
     --max-left-w-of-productivity: 0px;
      /* current total minutes */
