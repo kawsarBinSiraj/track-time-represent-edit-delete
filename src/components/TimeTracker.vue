@@ -5,6 +5,18 @@ export default {
     name: "time-tracker",
     props: {
         timeTrackers: Object,
+        onSaveText: {
+            type: String,
+            default: "Save",
+        },
+        deleteAlertText: {
+            type: String,
+            default: "Delete",
+        },
+        insertAlertText: {
+            type: String,
+            default: "Insert",
+        },
         editable: {
             type: Boolean,
             default: false,
@@ -22,9 +34,9 @@ export default {
         return {
             MIN_PIXELS: 5,
             EACH_HOURS_WIDTH: 5 * 60,
-            minW: 5 * 5, // min-minute = (5 / 1) = 5
+            minW: 1 * 5, // per minutes 5 px
             maxH: 50, // Fixed height
-            minH: 50, // Fixed minimum height   count: 0,
+            minH: 50, // Fixed minimum height
             top: 0,
             bottom: 0,
             width: 40,
@@ -34,7 +46,7 @@ export default {
             event: "",
             dragSelector: ".resizable-inner-block",
             customData: {
-                shiftsInfo: {
+                shiftInfo: {
                     startH: "04",
                     startM: "13",
                     endH: "10",
@@ -59,6 +71,16 @@ export default {
         VueResizable,
     },
 
+    watch: {
+        timeTrackers(newTrackers, oldTrackers) {
+            this.createdHoursData(newTrackers?.shiftInfo);
+            this.modifyRootData(newTrackers?.data);
+        },
+    },
+    mounted() {
+        this.createdHoursData(this.timeTrackers?.shiftInfo);
+        this.modifyRootData(this.timeTrackers?.data);
+    },
     methods: {
         openDeleteModal() {
             const modalElement = this.$refs.deleteModal;
@@ -98,22 +120,22 @@ export default {
         },
 
         generateResults(customData) {
-            const { data, shiftsInfo } = customData;
+            const { data, shiftInfo } = customData;
             const generatedData = data.map((i, j) => {
                 const { id, type, start_time, end_time } = i;
                 return { id, type, start_time, end_time };
             });
-            return { ...this.timeTrackers, data: generatedData, shiftsInfo };
+            return { ...this.timeTrackers, data: generatedData, shiftInfo };
         },
 
         getShiftStartMinutes() {
-            const { start_time } = this.timeTrackers.shiftsInfo;
+            const { start_time } = this.timeTrackers.shiftInfo;
             const date = new Date(start_time);
             const utcMinutes = date.getUTCMinutes();
             return utcMinutes;
         },
         getShiftEndMinutes() {
-            const { end_time } = this.timeTrackers.shiftsInfo;
+            const { end_time } = this.timeTrackers.shiftInfo;
             const date = new Date(end_time);
             const utcMinutes = date.getUTCMinutes();
             return utcMinutes;
@@ -189,11 +211,11 @@ export default {
             this.handleOnChange();
         },
 
-        createStartAndEndTime(shiftsInfo, adjustments) {
+        createStartAndEndTime(shiftInfo, adjustments) {
             const startHours = Number(adjustments.startHours);
             const startMin = Number(adjustments.startMin);
-            // Parse the original start time from shiftsInfo
-            const originalStartDate = new Date(shiftsInfo.start_time);
+            // Parse the original start time from shiftInfo
+            const originalStartDate = new Date(shiftInfo.start_time);
 
             // Create a new start date based on provided startHours and startMin
             const newStartDate = new Date(originalStartDate); // Clone the original date
@@ -369,7 +391,6 @@ export default {
                 customData.push({
                     maxWidth: 0,
                     ...TEMP_DATA[i],
-                    ...this.customData.data[i],
                     ...this.calculatePositionsAndWidth(start_time, end_time),
                 });
             }
@@ -503,9 +524,9 @@ export default {
                     this.modifyRootData(this.customData.data);
                 }
             }
-            // re-calculate minimum-minute
             // currently it will ensure 1 minute
-            this.minW = this.MIN_PIXELS * 5;
+            // re-calculate minimum-minute
+            this.minW = 1 * this.MIN_PIXELS;
         },
 
         handleOk() {
@@ -591,7 +612,7 @@ export default {
                 type: isProductive ? "PRODUCTIVE" : "BREAK",
             };
 
-            const { start_time, end_time } = this.createStartAndEndTime(this.customData.shiftsInfo, tempItem);
+            const { start_time, end_time } = this.createStartAndEndTime(this.customData.shiftInfo, tempItem);
             tempItem["start_time"] = start_time;
             tempItem["end_time"] = end_time;
 
@@ -652,11 +673,11 @@ export default {
             }
 
             this.customData.hoursData = tempHeader;
-            this.customData.shiftsInfo = this.timeTrackers.shiftsInfo;
+            this.customData.shiftInfo = this.timeTrackers.shiftInfo;
         },
 
         infilterMinutesForLastItem() {
-            const endMinute = Number(this.customData.shiftsInfo.endM); // Ending minute, e.g., 50
+            const endMinute = Number(this.customData.shiftInfo.endM); // Ending minute, e.g., 50
             const interval = 5; // Each interval is 5 minutes
             const roundedEndMinute = Math.floor(endMinute / interval) * interval; // Round down to nearest multiple of 5
             const minutesArray = [];
@@ -669,34 +690,29 @@ export default {
             return minutesArray;
         },
     },
-    watch: {
-        timeTrackers(newTrackers, oldTrackers) {
-            this.createdHoursData(newTrackers.shiftsInfo);
-            this.modifyRootData(newTrackers.data);
-        },
-    },
-    mounted() {
-        this.createdHoursData(this.timeTrackers?.shiftsInfo);
-        this.modifyRootData(this.timeTrackers?.data);
-    },
 };
 </script>
 
 <template>
     <main
         id="main"
+        developed-by="kawsar bin siraj"
         :style="{
             '--each-min-pixels': this.MIN_PIXELS + 'px',
             '--hours-length': this.customData.hoursData.length,
             '--left-minus': Number(this.getShiftStartMinutes()) * this.MIN_PIXELS + 'px',
+            '--subs': Number(60 - this.getShiftEndMinutes()) * this.MIN_PIXELS + 'px',
         }"
     >
+        <!-- zoom(in/out)  -->
         <div class="enable-zoom zoom mb-3 d-flex align-items-center">
             <button class="custom-btn rounded-circle me-1" type="button" @click="handleZoom('plus')">+</button>
             <button class="custom-btn rounded-circle me-3" type="button" @click="handleZoom('minus')">-</button>
-            <h4 class="mb-0 fw-normal">{{ this.timeTrackers?.shiftsInfo?.title }}</h4>
-            <button v-if="this.editable" @click="this.handleSubmit" class="ms-auto btn btn-sm btn-success bg-gradient">Save</button>
+            <h4 class="mb-0 fw-normal">{{ this.timeTrackers?.shiftInfo?.title }}</h4>
+            <button v-if="this.editable" @click="this.handleSubmit" class="ms-auto btn btn-sm btn-success bg-gradient">{{ this.onSaveText }}</button>
         </div>
+
+        <!-- timeline-widget -->
         <div ref="timelineRef" class="timeline-widget border rounded">
             <div class="timeline-header">
                 <div
@@ -728,21 +744,14 @@ export default {
                     </div>
                 </div>
             </div>
-            <div
-                v-if="customData.data"
-                :style="{
-                    '--subs': Number(60 - this.getShiftEndMinutes()) * this.MIN_PIXELS + 'px',
-                }"
-                class="productivity"
-                @dblclick="handleDoubleClick"
-                ref="productivityContainer"
-            >
+            <div v-if="customData.data" class="productivity" @dblclick="handleDoubleClick" ref="productivityContainer">
                 <vue-resizable
                     v-for="(item, index) in customData.data"
                     :key="item.id"
                     :class="{
                         resizable: true,
                         'productivity-steps': item.type === 'PRODUCTIVE',
+                        'small-resizer': item.breakWidth < 25,
                     }"
                     :ref="'resizableComponent'"
                     :dragSelector="undefined"
@@ -786,16 +795,18 @@ export default {
                                     d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47M8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5"
                                 />
                             </svg>
-                            Delete !
+                            {{ this.deleteAlertText }} !
                         </h1>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body p-4 pt-0">
-                        <h3 class="fs-4 fw-light">Are you sure, you want to delete this?</h3>
+                        <h3 class="fs-4 fw-light">
+                            Are <span class="text-lowercase">you sure, you want to {{ this.deleteAlertText }} this?</span>
+                        </h3>
                     </div>
                     <div class="modal-footer pe-4">
                         <button type="button" class="btn btn-sm btn-secondary bg-gradient" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" @click="handleOk" class="btn btn-sm btn-danger bg-gradient">Delete</button>
+                        <button type="button" @click="handleOk" class="btn btn-sm btn-danger bg-gradient">{{ this.deleteAlertText }}</button>
                     </div>
                 </div>
             </div>
@@ -839,7 +850,7 @@ export default {
                     </div>
                     <div class="modal-footer pe-4">
                         <button type="button" class="btn btn-sm btn-secondary bg-gradient" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" @click="handleTypeOkMethod" class="btn btn-sm btn-primary bg-gradient">Insert</button>
+                        <button type="button" @click="handleTypeOkMethod" class="btn btn-sm btn-primary bg-gradient">{{ this.insertAlertText }}</button>
                     </div>
                 </div>
             </div>
