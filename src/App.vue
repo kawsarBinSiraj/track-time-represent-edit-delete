@@ -76,7 +76,7 @@ export default {
         </header>
         <!-- <button class="btn btn-warning btn-sm mb-3" @click="incrementEndTime()">click for debugging</button> -->
         <div class="individual-tracker mb-2" v-for="timeTrackers in trackersInfo" :key="timeTrackers.id">
-            <time-tracker :timeTrackers="timeTrackers" :editable="true" :onSave="handleSave" :onChange="handleChange" onSaveText="Update" insertAlertText="Insert" deleteAlertText="Remove" />
+            <time-tracker :timeTrackers="timeTrackers" :editable="true" :onSave="handleSave" :onChange="handleChange" onSaveText="Save" insertAlertText="Insert" deleteAlertText="Remove" />
         </div>
         <pre id="result" v-if="result">
             {{ JSON.stringify(result, null, 2) }}

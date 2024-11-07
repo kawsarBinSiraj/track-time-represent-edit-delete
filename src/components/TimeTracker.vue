@@ -45,6 +45,8 @@ export default {
             fit: true,
             event: "",
             dragSelector: ".resizable-inner-block",
+            totalBreakTime: 0,
+            totalProductiveTime: 0,
             customData: {
                 shiftInfo: {
                     startH: "04",
@@ -110,6 +112,11 @@ export default {
         },
 
         handleOnChange() {
+            // making total times
+            const { total_break_time, total_productive_time } = this.calculateTotalTimes(this.customData.data);
+            this.totalBreakTime = total_break_time;
+            this.totalProductiveTime = total_productive_time;
+
             clearTimeout(this.debounceTimer);
             this.debounceTimer = setTimeout(() => {
                 if (this.onChange) {
@@ -125,7 +132,41 @@ export default {
                 const { id, type, start_time, end_time } = i;
                 return { id, type, start_time, end_time };
             });
+            shiftInfo["total_break_time"] = this.totalBreakTime;
+            shiftInfo["total_productive_time"] = this.totalProductiveTime;
+
             return { ...this.timeTrackers, data: generatedData, shiftInfo };
+        },
+
+        calculateTotalTimes(data) {
+            let totalBreakTime = 0; // Total break time in minutes
+            let totalProductiveTime = 0; // Total productive time in minutes
+
+            data.forEach((entry) => {
+                const startTime = new Date(entry.start_time);
+                const endTime = new Date(entry.end_time);
+
+                // Calculate the duration in minutes
+                const durationMinutes = (endTime - startTime) / (1000 * 60); // Convert from milliseconds to minutes
+
+                if (entry.type === "BREAK") {
+                    totalBreakTime += durationMinutes;
+                } else if (entry.type === "PRODUCTIVE") {
+                    totalProductiveTime += durationMinutes;
+                }
+            });
+
+            // Helper function to convert minutes to hours:minutes format
+            function formatTime(minutes) {
+                const hours = Math.floor(minutes / 60);
+                const mins = Math.floor(minutes % 60);
+                return `${hours}h:${mins.toString().padStart(2, "0")}m`;
+            }
+
+            return {
+                total_break_time: formatTime(totalBreakTime),
+                total_productive_time: formatTime(totalProductiveTime),
+            };
         },
 
         getShiftStartMinutes() {
@@ -398,6 +439,11 @@ export default {
             // set state customData
             this.customData.data = customData;
 
+            // making total times
+            const { total_break_time, total_productive_time } = this.calculateTotalTimes(this.customData.data);
+            this.totalBreakTime = total_break_time;
+            this.totalProductiveTime = total_productive_time;
+
             // sort the data
             this.customData.data.sort((a, b) => {
                 if (a.startPosition === b.startPosition) {
@@ -429,7 +475,7 @@ export default {
                 }
 
                 // if each minute pixels is greater than 5 pixels, then add minimum width is 5 minute
-                const MIN_WIDTH = this.MIN_PIXELS * 5;
+                const MIN_WIDTH = this.MIN_PIXELS * 1;
                 // Calculate the new item's start and end positions
                 let newItemStart = relativeX;
                 let newItemEnd = newItemStart + MIN_WIDTH;
@@ -450,16 +496,17 @@ export default {
                 const insertAble = this.isInsertAble(intervals, newItemStart, newItemEnd);
 
                 if (insertAble) {
+                    const minimumInsertAbleMinutes = newItemEnd + 20; // 1 + 4 minutes
                     this.insertItem = {
                         ...this.insertItem,
                         isTypeModalVisible: true,
                         newItemStart: newItemStart,
-                        newItemEnd: newItemEnd,
+                        newItemEnd: minimumInsertAbleMinutes,
                     };
                     this.openSelectTypeModal();
                 } else {
                     // invalid for insertions
-                    return alert("There is not enough for insertion. Minimum insertion limit is " + (this.MIN_PIXELS * 5) / this.MIN_PIXELS + " minutes");
+                    return alert("There is not enough for insertion. Minimum insertion limit is " + (this.MIN_PIXELS * 1) / this.MIN_PIXELS + " minutes");
                 }
             } else {
                 // is control is true, prevent to delete
@@ -475,10 +522,8 @@ export default {
         isInsertAble(currentPositions, newStart, newEnd) {
             for (const pos of currentPositions) {
                 // Check for overlap
-                if (
-                    newStart < pos.end &&
-                    newEnd > pos.start // Overlapping condition
-                ) {
+                // Overlapping condition
+                if (newStart < pos.end && newEnd > pos.start) {
                     return false; // Overlap detected, not insert-able
                 }
             }
@@ -534,6 +579,7 @@ export default {
                 this.handleDelete(this.deleteItemId);
                 this.deleteItemId = null;
                 this.closeDeleteModal();
+                this.handleOnChange();
             }
         },
 
@@ -627,6 +673,7 @@ export default {
                 return a.startPosition - b.startPosition; // Sort by startPosition
             });
             this.closeSelectTypeModal();
+            this.handleOnChange();
         },
 
         createdHoursData(shift = {}) {
@@ -704,13 +751,23 @@ export default {
             '--subs': Number(60 - this.getShiftEndMinutes()) * this.MIN_PIXELS + 'px',
         }"
     >
-        <!-- zoom(in/out)  -->
-        <div class="enable-zoom zoom mb-3 d-flex align-items-center">
+        <!-- track time header  -->
+        <header class="enable-zoom zoom mb-3 d-flex flex-wrap align-items-center">
             <button class="custom-btn rounded-circle me-1" type="button" @click="handleZoom('plus')">+</button>
             <button class="custom-btn rounded-circle me-3" type="button" @click="handleZoom('minus')">-</button>
-            <h4 class="mb-0 fw-normal">{{ this.timeTrackers?.shiftInfo?.title }}</h4>
+            <h4 class="mb-0 fw-normal me-3">{{ this.timeTrackers?.shiftInfo?.title }}</h4>
+            <div class="total-times fw-light" v-if="this.totalBreakTime && this.totalProductiveTime">
+                <span class="fw-normal d-inline-flex align-items-center gap-1">
+                    <span class="badge bg-productive">Productive</span>
+                    <span style="width: 65px" class="fw-bold">{{ this.totalProductiveTime }}</span>
+                </span>
+                <span class="fw-normal d-inline-flex align-items-center gap-1 ms-2">
+                    <span class="badge bg-break">Break</span>
+                    <span style="width: 65px" class="fw-bold">{{ this.totalBreakTime }} </span>
+                </span>
+            </div>
             <button v-if="this.editable" @click="this.handleSubmit" class="ms-auto btn btn-sm btn-success bg-gradient">{{ this.onSaveText }}</button>
-        </div>
+        </header>
 
         <!-- timeline-widget -->
         <div ref="timelineRef" class="timeline-widget border rounded">
